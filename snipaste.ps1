@@ -5,8 +5,18 @@ Add-Type -AssemblyName System.Drawing
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Snipaste"
 $form.StartPosition = "CenterScreen"
+$form.Size = New-Object System.Drawing.Size(400, 300)
 $form.TopMost = $true
 $form.FormBorderStyle = "None"
+
+$label = New-Object System.Windows.Forms.Label
+$label.Location = New-Object System.Drawing.Point(10, 10)
+$label.Size = New-Object System.Drawing.Size(400, 300)
+# $label.Dock = 'Center'
+$label.Text = "INSTRUCTIONS:`n1. Alt+S to capture RIO.`n2. Alt+Q to minimize.`n3. Scroll to scale.`n4. Escape to quit."
+$font = New-Object System.Drawing.Font("Arial", 12, [System.Drawing.FontStyle]::Bold)
+$label.Font = $font
+$form.Controls.Add($label)
 
 # Create picture frame and set properties
 $pictureFrame = New-Object System.Windows.Forms.PictureBox
@@ -17,34 +27,35 @@ $form.Controls.Add($pictureFrame)
 $global:bitmap = $null
 
 # get screen's width and height, if necessary
-$mainScreen = [System.Windows.Forms.Screen]::PrimaryScreen
-$screenWidth = $mainScreen.Bounds.Width
-$screenHeight = $mainScreen.Bounds.Height
+# $mainScreen = [System.Windows.Forms.Screen]::PrimaryScreen
+# $screenWidth = $mainScreen.Bounds.Width
+# $screenHeight = $mainScreen.Bounds.Height
 
 # Add mouse wheel event to zoom in/out the picture
 $pictureFrame.Add_MouseWheel({
-    # Zoom out
-    if ($_.Delta -gt 0) {
-        Write-Host "pictureFrame widthxheight: ", $pictureFrame.Width, $pictureFrame.Height
-        $pictureFrame.Width *= 1.1
-        $pictureFrame.Height *= 1.1
-        $form.Width *= 1.1
-        $form.Height *= 1.1
-    }
-    # Zoom in
-    else {
-        $pictureFrame.Width /= 1.1
-        $pictureFrame.Height /= 1.1
-        $form.Width /= 1.1
-        $form.Height /= 1.1
-    }
-})
+        # Zoom out
+        if ($_.Delta -gt 0) {
+            Write-Host "pictureFrame widthxheight: ", $pictureFrame.Width, $pictureFrame.Height
+            $pictureFrame.Width *= 1.1
+            $pictureFrame.Height *= 1.1
+            $form.Width *= 1.1
+            $form.Height *= 1.1
+        }
+        # Zoom in
+        else {
+            $pictureFrame.Width /= 1.1
+            $pictureFrame.Height /= 1.1
+            $form.Width /= 1.1
+            $form.Height /= 1.1
+        }
+    })
 
 $form.Add_KeyDown({
         # Alt+S: snipaste function
         if ($_.KeyCode -eq "S" -and $_.Modifiers -eq "Alt") {
             # Hide form temporarily to allow user to select screen region
             $form.Hide()
+            $label.Hide()
 
             # Prompt user to select screen region
             $region = [System.Windows.Forms.Screen]::GetBounds([System.Drawing.Point]::Empty)
@@ -83,6 +94,8 @@ $form.Add_KeyDown({
                         $graphics = [System.Drawing.Graphics]::FromImage($global:bitmap)
                         $graphics.CopyFromScreen($regionSelector.X, $regionSelector.Y, 0, 0, $global:bitmap.Size)
                         $pictureFrame.Image = $global:bitmap
+                        # Copy bitmap to clipboard
+                        [System.Windows.Forms.Clipboard]::SetImage($global:bitmap)
                     }
                     $selectorForm.Close()
 
@@ -104,7 +117,9 @@ $form.Add_KeyDown({
     })
 
 $form.Add_KeyDown({
-        # if ($_.KeyCode -eq "Q" -and $_.Alt) {
+        if ($_.KeyCode -eq "Q" -and $_.Alt) {
+            $form.WindowState = "Minimized"
+        }
         if ($_.KeyCode -eq "Escape") {
             $form.Close()
         }
@@ -116,22 +131,36 @@ $global:formLeft = $form.Left
 $global:mouseDownPoint = $null
 
 $pictureFrame.Add_MouseDown({
-        $global:mouseDownPoint = [System.Windows.Forms.Cursor]::Position
-        $global:formTop = $form.Top
-        $global:formLeft = $form.Left
-        Write-Host '$formTop1: ', $global:formTop, ', $formLeft1: ', $global:formLeft
-    })
+    $global:mouseDownPoint = [System.Windows.Forms.Cursor]::Position
+    $global:formTop = $form.Top
+    $global:formLeft = $form.Left
+})
 
 $pictureFrame.Add_MouseMove({
-        if ([System.Windows.Forms.Control]::MouseButtons -eq "Left") {
-            $currentMousePoint = [System.Windows.Forms.Cursor]::Position
-            $deltaX = $currentMousePoint.X - $global:mouseDownPoint.X
-            $deltaY = $currentMousePoint.Y - $global:mouseDownPoint.Y
-            $form.Top = $global:formTop + $deltaY
-            $form.Left = $global:formLeft + $deltaX
-            Write-Host '$formTop2: ', $global:formTop, ', $formLeft2: ', $global:formLeft
-        }
-    })
+    if ([System.Windows.Forms.Control]::MouseButtons -eq "Left") {
+        $currentMousePoint = [System.Windows.Forms.Cursor]::Position
+        $deltaX = $currentMousePoint.X - $global:mouseDownPoint.X
+        $deltaY = $currentMousePoint.Y - $global:mouseDownPoint.Y
+        $form.Top = $global:formTop + $deltaY
+        $form.Left = $global:formLeft + $deltaX
+    }
+})
+
+$label.Add_MouseDown({
+    $global:mouseDownPoint = [System.Windows.Forms.Cursor]::Position
+    $global:formTop = $form.Top
+    $global:formLeft = $form.Left
+})
+
+$label.Add_MouseMove({
+    if ([System.Windows.Forms.Control]::MouseButtons -eq "Left") {
+        $currentMousePoint = [System.Windows.Forms.Cursor]::Position
+        $deltaX = $currentMousePoint.X - $global:mouseDownPoint.X
+        $deltaY = $currentMousePoint.Y - $global:mouseDownPoint.Y
+        $form.Top = $global:formTop + $deltaY
+        $form.Left = $global:formLeft + $deltaX
+    }
+})
 
 # Show the form
 $form.ShowDialog() | Out-Null
