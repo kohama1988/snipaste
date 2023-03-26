@@ -1,3 +1,57 @@
+$pinvoke = @"
+using System;
+using System.Runtime.InteropServices;
+namespace Win32
+{
+    public static class NativeMethods
+    {
+
+        public const int S_OK = 0;
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/shellscalingapi/ne-shellscalingapi-process_dpi_awareness
+        public enum PROCESS_DPI_AWARENESS
+        {
+            PROCESS_DPI_UNAWARE = 0,
+            PROCESS_SYSTEM_DPI_AWARE = 1,
+            PROCESS_PER_MONITOR_DPI_AWARE = 2
+        }
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/shellscalingapi/nf-shellscalingapi-getprocessdpiawareness
+        [DllImport("Shcore.dll")]
+        public static extern int GetProcessDpiAwareness(
+            IntPtr hprocess,
+            ref PROCESS_DPI_AWARENESS value
+        );
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/shellscalingapi/nf-shellscalingapi-setprocessdpiawareness
+        [DllImport("Shcore.dll")]
+        public static extern int SetProcessDpiAwareness(
+            PROCESS_DPI_AWARENESS value
+        );
+
+    }
+}
+"@;
+
+Add-Type -TypeDefinition $pinvoke;
+
+$dpiAwareness = "PROCESS_PER_MONITOR_DPI_AWARE";
+$hresult = [Win32.NativeMethods]::GetProcessDpiAwareness([IntPtr]::Zero, [ref] $dpiAwareness);
+if( $hresult -ne [Win32.NativeMethods]::S_OK )
+{
+    throw "failed to get dpi awareness with hresult '$hresult'";
+}
+write-host "current DPI Awareness = $dpiAwareness";
+
+# this will return -2147024891 => 0x80070005 => E_ACCESSDENIED if called more than once
+$hresult = [Win32.NativeMethods]::SetProcessDpiAwareness("PROCESS_PER_MONITOR_DPI_AWARE");
+if( $hresult -ne [Win32.NativeMethods]::S_OK )
+{
+    throw "failed to set dpi awareness with hresult '$hresult'";
+}
+
+
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
@@ -8,6 +62,9 @@ $form.StartPosition = "CenterScreen"
 $form.Size = New-Object System.Drawing.Size(400, 300)
 $form.TopMost = $true
 $form.FormBorderStyle = "None"
+# $form.AutoScale = $true
+# $form.AutoScaleDimensions = New-Object System.Drawing.SizeF(2724, 2272) # 设置DPI为96
+# $form.AutoScaleMode = 'dpi'
 
 $label = New-Object System.Windows.Forms.Label
 $label.Location = New-Object System.Drawing.Point(10, 10)
@@ -35,7 +92,7 @@ $global:bitmap = $null
 $pictureFrame.Add_MouseWheel({
         # Zoom out
         if ($_.Delta -gt 0) {
-            Write-Host "pictureFrame widthxheight: ", $pictureFrame.Width, $pictureFrame.Height
+            # Write-Host "pictureFrame widthxheight: ", $pictureFrame.Width, $pictureFrame.Height
             $pictureFrame.Width *= 1.1
             $pictureFrame.Height *= 1.1
             $form.Width *= 1.1
@@ -73,7 +130,7 @@ $form.Add_KeyDown({
             $selectorForm.Add_MouseDown({
                     $regionSelector.X = [System.Windows.Forms.Cursor]::Position.X
                     $regionSelector.Y = [System.Windows.Forms.Cursor]::Position.Y
-                    Write-Host "regionSeletor-1", $regionSelector.X, $regionSelector.Y
+                    # Write-Host "regionSeletor-1", $regionSelector.X, $regionSelector.Y
                 })
         
             $selectorForm.Add_MouseMove({
@@ -87,7 +144,7 @@ $form.Add_KeyDown({
                 })
 
             $selectorForm.Add_MouseUp({
-                    Write-Host "release mouse", $regionSelector.Width, $regionSelector.Height
+                    # Write-Host "release mouse", $regionSelector.Width, $regionSelector.Height
                     # Capture screen region and display in picture frame
                     if ($regionSelector.Width -gt 0 -and $regionSelector.Height -gt 0) {
                         $global:bitmap = New-Object System.Drawing.Bitmap([int]$regionSelector.Width, [int]$regionSelector.Height)
@@ -96,6 +153,7 @@ $form.Add_KeyDown({
                         $pictureFrame.Image = $global:bitmap
                         # Copy bitmap to clipboard
                         [System.Windows.Forms.Clipboard]::SetImage($global:bitmap)
+
                     }
                     $selectorForm.Close()
 
@@ -136,7 +194,7 @@ $pictureFrame.Add_MouseDown({
     $global:formLeft = $form.Left
 })
 
-$pictureFrame.Add_MouseMove({
+$pictureFrame.Add_MouseMove({$currentMousePoint
     if ([System.Windows.Forms.Control]::MouseButtons -eq "Left") {
         $currentMousePoint = [System.Windows.Forms.Cursor]::Position
         $deltaX = $currentMousePoint.X - $global:mouseDownPoint.X
@@ -164,3 +222,4 @@ $label.Add_MouseMove({
 
 # Show the form
 $form.ShowDialog() | Out-Null
+$form.Dispose()
